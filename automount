@@ -116,20 +116,20 @@ BOOTDELAY (set to 45 seconds by default)
   How long to wait for boot process to complete.
 
   example: BOOTDELAY="30"
-  
+
 USEDISKIDENT (<YES|NO> set to NO by default)
   This allows devices to be mounted and checked based
   on their individual identifier instead of the
   device name allocated to it by the driver.
 
   example: USEDISKIDENT="YES"
-  
+
 MOUNTALL (<YES|NO> set to NO by default)
   Attemps to mount all the partitions found on the
   device
 
   example: MOUNTALL="YES"
-  
+
 EOF
   exit 0
 }
@@ -258,6 +258,7 @@ __wait_for_boot() {  # 1=DEV
   local BOOTTIME=$( sysctl -n kern.boottime | awk -F',' '{print $1}' | awk '{print $NF }' )
   local CURRTIME=$( date +%s )
   local UPTIME=$(( ${CURRTIME} - ${BOOTTIME} ))
+  local WAIT=0
   while [ ${UPTIME} -lt ${BOOTDELAY} ]
   do
     sleep 1
@@ -309,7 +310,7 @@ then
 fi
 
 for DEV in ${PARTITIONS}
-do 
+do
   case ${2} in
     (attach)
       __random_wait ${DEV}
@@ -357,7 +358,6 @@ do
               ADD=1
             else
               __log "${DEV}: mount failed (fat) 'mount_msdosfs ${OPTS} -o large -o longnames -D ${CODEPAGE} -L ${ENCODING} -m 644 -M 755 ${DEV} ${MNT}'"
-              exit 1
             fi
             __log "${DEV}: mount (fat)"
             ;;
@@ -378,7 +378,6 @@ do
                   ADD=1
                 else
                   __log "${DEV}: mount failed (ntfs) 'ntfs-3g ${OPTS} ${DEV} ${MNT}'"
-                  exit 1
                 fi
               fi
             else
@@ -391,7 +390,6 @@ do
                 ADD=1
               else
                 __log "${DEV}: mount failed (ntfs) 'mount_ntfs ${OPTS} ${DEV} ${MNT}'"
-                exit 1
               fi
             fi
             __log "${DEV}: mount (ntfs)"
@@ -410,7 +408,6 @@ do
               ADD=1
             else
               __log "${DEV}: mount failed (ext2) 'mount -t ext2fs ${OPTS} ${DEV} ${MNT}'"
-              exit 1
             fi
             __log "${DEV}: mount (ext2)"
             ;;
@@ -428,7 +425,6 @@ do
               ADD=1
             else
               __log "${DEV}: mount failed (ext3) 'mount -t ext2fs ${OPTS} ${DEV} ${MNT}'"
-              exit 1
             fi
             __log "${DEV}: mount (ext3)"
             ;;
@@ -446,7 +442,6 @@ do
               ADD=1
             else
               __log "${DEV}: mount failed (ext4) 'ext4fuse ${DEV} ${MNT}'"
-              exit 1
             fi
             __log "${DEV}: mount (ext4)"
             ;;
@@ -464,7 +459,6 @@ do
               ADD=1
             else
               __log "${DEV}: mount failed (ufs) 'mount -t ufs ${OPTS} ${DEV} ${MNT}'"
-              exit 1
             fi
             __log "${DEV}: mount (ufs)"
             ;;
@@ -478,7 +472,6 @@ do
                   ADD=1
                 else
                   __log "${DEV}: mount failed (exfat) 'mount.exfat ${OPTS} ${DEV} ${MNT}'"
-                  exit 1
                 fi
                 __log "${DEV}: mount (exfat)"
                 ;;
@@ -496,6 +489,8 @@ do
           then
             su - ${USER} -c "env DISPLAY=:0 ${FM} ${MNT} &"
           fi
+        else
+          __remove_dir "${MNT}" 
         fi
       fi
       ;;
