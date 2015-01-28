@@ -281,32 +281,15 @@ __random_wait() { # 1=DEV
   __log "${1}: random wait for '${WAIT}' seconds before 'attach' action"
 }
 
-ROOTDEV=""
-
 __wait_for_boot ${1}
 
-if [ "${USEDISKIDENT}" == "YES" ]
-then
-  POTENTIALDEV=/dev/diskid/DISK-$(diskinfo -v ${1} | grep -i "Disk ident" | cut -f 2 -w)
-
-  if [ -e ${POTENTIALDEV} ]
-  then
-    ROOTDEV=${POTENTIALDEV}
-  else
-    __log "${1}: Unable to find serial number. Defaulting to using device as identifier."
-  fi
-fi
-
-if [ "${ROOTDEV}" == "" ]
-then
-  ROOTDEV=/dev/${1}
-fi
+ROOTDEV=/dev/${1}
 
 PARTITIONS=${ROOTDEV}
 
 if [ "${MOUNTALL}" == "YES" ]
 then
-  PARTITIONS=$(ls -1 ${ROOTDEV}*)
+  PARTITIONS=$(echo ${ROOTDEV}*)
 fi
 
 for DEV in ${PARTITIONS}
@@ -315,7 +298,13 @@ do
     (attach)
       __random_wait ${DEV}
       __log "${DEV}: attach"
-      MNTNAME=$( echo ${DEV} | grep -o '[^/]*$' )
+      if [ "${USEDISKIDENT}" == "YES" ]
+      then
+        DISKIDENT=$(diskinfo -v ${ROOTDEV} | grep -i "Disk ident" | cut -f 2 -w)
+        MNTNAME=${DISKIDENT}${DEV#$ROOTDEV}
+      else
+        MNTNAME=$( echo ${DEV} | grep -o '[^/]*$' )
+      fi
       BLACKLISTED="NO"
       if [ "${BLACKLIST}" != "" ]
         then
@@ -490,7 +479,7 @@ do
             su - ${USER} -c "env DISPLAY=:0 ${FM} ${MNT} &"
           fi
         else
-          __remove_dir "${MNT}" 
+          __remove_dir "${MNT}"
         fi
       fi
       ;;
