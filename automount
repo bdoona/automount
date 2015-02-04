@@ -281,6 +281,58 @@ __random_wait() { # 1=DEV
   __log "${1}: random wait for '${WAIT}' seconds before 'attach' action"
 }
 
+__fstype() { # 1=DEV
+  TYPE=$( dd < ${DEV} count=1 2> /dev/null | strings | head -1 )
+  if echo "${TYPE}" | grep -q 'EXFAT'
+  then
+    TYPE=EXFAT
+    return
+  fi
+  TYPE=''
+  TYPE=$( file -r -b -L -s ${DEV} | sed -E 's/label:\ \".*\"//g' )
+  if echo "${TYPE}" | grep -q 'Unix Fast File'
+  then
+    TYPE=UFS
+    return
+  fi
+  if echo "${TYPE}" | grep -q 'ext2'
+  then
+    TYPE=EXT2
+    return
+  fi
+  if echo "${TYPE}" | grep -q 'ext3'
+  then
+    TYPE=EXT3
+    return
+  fi
+  if echo "${TYPE}" | grep -q 'ext4'
+  then
+    TYPE=EXT4
+    return
+  fi
+  if echo "${TYPE}" | grep -q 'DOS/MBR boot sector'
+  then
+    TYPE=$( file -r -k -b -L -s ${DEV} | sed -E 's/label:\ \".*\"//g' )
+    if echo "${TYPE}" | grep -q 'Unix Fast File'
+    then
+      TYPE=UFS
+      return
+    fi
+    if echo "${TYPE}" | grep -q 'FAT'
+    then
+      TYPE=FAT
+      return
+    fi
+    if echo "${TYPE}" | grep -q 'NTFS'
+    then
+      TYPE=NTFS
+      return
+    fi
+  fi
+  TYPE=-1
+  return
+}
+
 __wait_for_boot ${1}
 
 ROOTDEV=/dev/${1}
@@ -331,8 +383,26 @@ do
           OPTS="-o noatime"
         fi
         __wait_for_device ${DEV}
-        case $( file -k -b -L -s ${DEV} | sed -E 's/label:\ \".*\"//g' ) in
-          (*FAT*) # must be before NTFS section because: newfs_msdos -O NTFS -L NTFS
+        __fstype ${DEV}
+        case ${TYPE} in
+            (UFS)
+              __create_mount_point ${DEV}
+              __wait_for_device ${DEV}
+              fsck_ufs -C -y ${DEV} \
+                | while read LINE
+                  do
+                    __log "${DEV}: fsck_ufs ${LINE}"
+                  done
+              __wait_for_device ${DEV}
+              if mount -t ufs ${OPTS} ${DEV} ${MNT}
+              then
+                ADD=1
+              else
+                __log "${DEV}: mount failed (ufs) 'mount -t ufs ${OPTS} ${DEV} ${MNT}'"
+              fi
+              __log "${DEV}: mount (ufs)"
+              ;;
+          (FAT) # must be before NTFS section because: newfs_msdos -O NTFS -L NTFS
             __create_mount_point ${DEV}
             __wait_for_device ${DEV}
             fsck_msdosfs -C -y ${DEV} \
@@ -350,7 +420,7 @@ do
             fi
             __log "${DEV}: mount (fat)"
             ;;
-          (*NTFS*) # must be after FAT section: newfs_msdos -O NTFS -L NTFS
+          (NTFS) # must be after FAT section: newfs_msdos -O NTFS -L NTFS
             __create_mount_point ${DEV}
             __wait_for_device ${DEV}
             if which ntfs-3g 1> /dev/null 2> /dev/null # sysutils/fusefs-ntfs
@@ -383,7 +453,7 @@ do
             fi
             __log "${DEV}: mount (ntfs)"
             ;;
-          (*ext2*)
+          (EXT2)
             __create_mount_point ${DEV}
             __wait_for_device ${DEV}
             e2fsck -y ${DEV} \
@@ -400,7 +470,7 @@ do
             fi
             __log "${DEV}: mount (ext2)"
             ;;
-          (*ext3*)
+          (EXT3)
             __create_mount_point ${DEV}
             __wait_for_device ${DEV}
             e2fsck -y ${DEV} \
@@ -417,7 +487,7 @@ do
             fi
             __log "${DEV}: mount (ext3)"
             ;;
-          (*ext4*)
+          (EXT4)
             __create_mount_point ${DEV}
             __wait_for_device ${DEV}
             e2fsck -y ${DEV} \
@@ -434,39 +504,19 @@ do
             fi
             __log "${DEV}: mount (ext4)"
             ;;
-          (*Unix\ Fast\ File*)
+          (EXFAT)
             __create_mount_point ${DEV}
             __wait_for_device ${DEV}
-            fsck_ufs -C -y ${DEV} \
-              | while read LINE
-                do
-                  __log "${DEV}: fsck_ufs ${LINE}"
-                done
-            __wait_for_device ${DEV}
-            if mount -t ufs ${OPTS} ${DEV} ${MNT}
+            if mount.exfat ${OPTS} ${DEV} ${MNT} # sysutils/fusefs-exfat
             then
               ADD=1
             else
-              __log "${DEV}: mount failed (ufs) 'mount -t ufs ${OPTS} ${DEV} ${MNT}'"
+              __log "${DEV}: mount failed (exfat) 'mount.exfat ${OPTS} ${DEV} ${MNT}'"
             fi
-            __log "${DEV}: mount (ufs)"
+            __log "${DEV}: mount (exfat)"
             ;;
           (*)
-            case $( dd < ${DEV} count=1 2> /dev/null | strings | head -1 ) in
-              (*EXFAT*)
-                __create_mount_point ${DEV}
-                __wait_for_device ${DEV}
-                if mount.exfat ${OPTS} ${DEV} ${MNT} # sysutils/fusefs-exfat
-                then
-                  ADD=1
-                else
-                  __log "${DEV}: mount failed (exfat) 'mount.exfat ${OPTS} ${DEV} ${MNT}'"
-                fi
-                __log "${DEV}: mount (exfat)"
-                ;;
-              (*)
-                __log "${DEV}: filesystem not supported or no filesystem"
-            esac
+            __log "${DEV}: filesystem not supported or no filesystem"
             ;;
         esac
         if [ ${ADD} -eq 1 ]
