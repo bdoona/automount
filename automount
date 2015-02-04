@@ -124,12 +124,6 @@ USEDISKIDENT (<YES|NO> set to NO by default)
 
   example: USEDISKIDENT="YES"
 
-MOUNTALL (<YES|NO> set to NO by default)
-  Attemps to mount all the partitions found on the
-  device
-
-  example: MOUNTALL="YES"
-
 EOF
   exit 0
 }
@@ -165,7 +159,6 @@ fi
 : ${DELAY="1"}                        # check for the device node that often
 : ${BOOTDELAY="45"}                   # wait for boot process to complete
 : ${USEDISKIDENT}="NO"                # option to use disk ident instead of device identifier
-: ${MOUNTALL} = "YES"                 # attempt to mount all the partitions found on the device
 
 if [ "${USERUMOUNT}" = YES ]
 then
@@ -337,12 +330,7 @@ __wait_for_boot ${1}
 
 ROOTDEV=/dev/${1}
 
-PARTITIONS=${ROOTDEV}
-
-if [ "${MOUNTALL}" == "YES" ]
-then
-  PARTITIONS=$(echo ${ROOTDEV}*)
-fi
+PARTITIONS=$(echo ${ROOTDEV}*)
 
 for DEV in ${PARTITIONS}
 do
