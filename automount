@@ -130,7 +130,7 @@ EOF
 
 if [ "${1}" = "--version" ]
 then
-  echo "automount X1.5.2 2015/02/21"
+  echo "automount X1.5.3 2015/02/05"
   exit 0
 fi
 
@@ -251,7 +251,7 @@ __wait_for_boot() {  # 1=DEV
   local BOOTTIME=$( sysctl -n kern.boottime | awk -F',' '{print $1}' | awk '{print $NF }' )
   local CURRTIME=$( date +%s )
   local UPTIME=$(( ${CURRTIME} - ${BOOTTIME} ))
-  local WAIT=0
+  WAIT=0
   while [ ${UPTIME} -lt ${BOOTDELAY} ]
   do
     sleep 1
