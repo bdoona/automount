@@ -117,12 +117,12 @@ BOOTDELAY (set to 45 seconds by default)
 
   example: BOOTDELAY="30"
 
-USEDISKIDENT (<YES|NO> set to NO by default)
+DISKIDENT (<NONE|IDENT|LABEL> set to NONE by default)
   This allows devices to be mounted and checked based
-  on their individual identifier instead of the
-  device name allocated to it by the driver.
+  on their individual identifier or partition label
+  instead of the device name allocated to it by the driver.
 
-  example: USEDISKIDENT="YES"
+  example: DISKIDENT="LABEL"
 
 EOF
   exit 0
@@ -158,7 +158,7 @@ fi
 : ${TIMEOUT="8"}                      # stop waiting for device after that time
 : ${DELAY="1"}                        # check for the device node that often
 : ${BOOTDELAY="45"}                   # wait for boot process to complete
-: ${USEDISKIDENT}="NO"                # option to use disk ident instead of device identifier
+: ${DISKIDENT}="NONE"                 # option to use disk ident instead of device identifier
 
 if [ "${USERUMOUNT}" = YES ]
 then
@@ -326,6 +326,38 @@ __fstype() { # 1=DEV
   return
 }
 
+__get_mount_name() { # $1 = ROOTDEV $2=DEV
+    local LOCALROOTDEV=${1}
+    local LOCALDEV=${2}
+    local LOCALSHORTDEVNAME=$( echo ${LOCALDEV} | grep -o '[^/]*$' )
+    local LOCALRESULT=""
+    local LOCALDISKIDENTVALUE=${DISKIDENT}
+
+    if [ "${LOCALDISKIDENTVALUE}" == "LABEL" ]
+    then
+      # currently only works for UFS
+      local LOCALLABEL=$(glabel status | grep ".*ufs\/.*\b${LOCALSHORTDEVNAME}\b" | sed 's/.*ufs\/\([^ ]*\).*/\1/')
+      LOCALRESULT=${LOCALLABEL}
+
+      if [ "${LOCALRESULT}" == "" ]
+      then
+        LOCALDISKIDENTVALUE="IDENT"
+      fi
+    fi
+
+    if [ "${LOCALDISKIDENTVALUE}" == "IDENT" ]
+    then
+      local LOCALIDENT=$(diskinfo -v ${LOCALROOTDEV} | grep -i "Disk ident" | cut -f 2 -w)
+      LOCALRESULT=${LOCALIDENT}${LOCALDEV#$LOCALROOTDEV}
+    fi
+
+    if [ "${LOCALRESULT}" == "" ]
+    then
+        LOCALRESULT=${LOCALSHORTDEVNAME}
+    fi
+    echo ${LOCALRESULT}
+}
+
 __wait_for_boot ${1}
 
 ROOTDEV=/dev/${1}
@@ -338,13 +370,7 @@ do
     (attach)
       __random_wait ${DEV}
       __log "${DEV}: attach"
-      if [ "${USEDISKIDENT}" == "YES" ]
-      then
-        DISKIDENT=$(diskinfo -v ${ROOTDEV} | grep -i "Disk ident" | cut -f 2 -w)
-        MNTNAME=${DISKIDENT}${DEV#$ROOTDEV}
-      else
-        MNTNAME=$( echo ${DEV} | grep -o '[^/]*$' )
-      fi
+      MNTNAME=$(__get_mount_name ${ROOTDEV} ${DEV})
       BLACKLISTED="NO"
       if [ "${BLACKLIST}" != "" ]
         then
@@ -538,13 +564,13 @@ do
               ( # put entire umount/find/rm block into background
                 umount -f ${TARGET}
                 __remove_dir "${TARGET}"
-                __log "${DEV}: removed '${TARGET}'"
+                __log "${DEV}: removed mount point directory '${TARGET}'"
               ) &
               unset TARGET
               __log "${DEV}: umount"
             done
-        __remove_dir "${MNTPREFIX}/${1}"
-        __log "${DEV}: mount point '${MNTPREFIX}/${1}' removed"
+#        __remove_dir "${MNTPREFIX}/${1}"
+#        __log "${DEV}: mount point '${MNTPREFIX}/${1}' removed"
       fi
       ;;
 
