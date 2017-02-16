@@ -338,7 +338,13 @@ __get_mount_name() { # $1 = ROOTDEV $2=DEV
       # currently only works for UFS
       local LOCALLABEL=$(glabel status | grep ".*ufs\/.*\b${LOCALSHORTDEVNAME}\b" | sed 's/.*ufs\/\([^ ]*\).*/\1/')
       LOCALRESULT=${LOCALLABEL}
-
+      
+      if [ "${LOCALRESULT}" == "" ]
+      then
+        local LOCALLABEL=$(glabel status | grep ".*gpt\/.*\b${LOCALSHORTDEVNAME}\b" | sed 's/.*gpt\/\([^ ]*\).*/\1/')
+        LOCALRESULT=${LOCALLABEL}
+      fi
+      
       if [ "${LOCALRESULT}" == "" ]
       then
         LOCALDISKIDENTVALUE="IDENT"
